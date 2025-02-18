@@ -1,50 +1,67 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import gradio as gr
 
 # Specify the model name
 model_name = "microsoft/phi-4"
 
-# Load the tokenizer and model from Hugging Face
 print("Loading tokenizer...")
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 print("Loading model...")
 model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto")
 
-def generate_response(prompt, chat_history=""):
+def generate_response(prompt, chat_history):
     """
-    Combines the chat history with the new prompt, generates a response,
-    and returns the updated conversation.
+    Generates a response from the PHI-4 model using an updated chat history format.
+    Chat history is now a list of dictionaries with "role" and "content" keys.
     """
-    # For a simple implementation, we’ll just consider the current prompt.
-    # For more context-aware conversations, consider incorporating `chat_history`.
-    input_text = chat_history + "\nUser: " + prompt + "\nAssistant: "
+    # Initialize chat_history if it's None.
+    if chat_history is None:
+        chat_history = []
+
+    # Append the user's message using the new format.
+    chat_history.append({"role": "user", "content": prompt})
     
-    # Tokenize input and move to the appropriate device
-    inputs = tokenizer.encode(input_text, return_tensors="pt").to(model.device)
+    # Build the conversation context by iterating over the chat history.
+    context = ""
+    for message in chat_history:
+        if message["role"] == "user":
+            context += "User: " + message["content"] + "\n"
+        else:  # role == "assistant"
+            context += "Assistant: " + message["content"] + "\n"
+    # Append the assistant prompt.
+    context += "Assistant: "
     
-    # Generate response
+    # Tokenize the context and prepare the attention mask.
+    encoded_inputs = tokenizer(context, return_tensors="pt")
+    input_ids = encoded_inputs.input_ids.to(model.device)
+    attention_mask = encoded_inputs.attention_mask.to(model.device)
+    
+    # Generate a response from the model.
     outputs = model.generate(
-        inputs,
-        max_length=inputs.shape[1] + 100,  # adjust max_length as needed
+        input_ids,
+        attention_mask=attention_mask,
+        max_length=input_ids.shape[1] + 100,  # Adjust response length as needed.
         do_sample=True,
         temperature=0.7,
         pad_token_id=tokenizer.eos_token_id
     )
     
-    # Decode the generated text and extract the new assistant response
+    # Decode the generated tokens.
     generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    # Extract only the assistant's response.
+    response = generated_text[len(context):].strip()
     
-    # Extract the new response (this assumes that the generated text appends the assistant's reply)
-    response = generated_text[len(input_text):].strip()
+    # Append the assistant's response to the chat history.
+    chat_history.append({"role": "assistant", "content": response})
     
-    # Update chat history
-    updated_history = input_text + response
-    return updated_history, updated_history
+    # Return the updated chat history.
+    return chat_history
 
-# Create a Gradio interface using a chatbot layout
+# Create a Gradio ChatInterface using the "messages" type.
 iface = gr.ChatInterface(
     fn=generate_response,
+    type="messages",  # Set to "messages" to use the new chat message format.
     title="PHI-4 Chatbot",
     description="Chat with Microsoft's PHI-4 model running locally."
 )

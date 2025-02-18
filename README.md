@@ -22,3 +22,6 @@ python phi_chat.py
 ```
 
 After you run the script, the model will be pulled, and then the chat interface will be available at `http://127.0.0.1:7860`
+
+## Next Steps
+More to come about fine-tuning a model to your own purposes. 

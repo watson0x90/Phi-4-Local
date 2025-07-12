@@ -3,3 +3,8 @@ torch
 gradio
 accelerate
 setuptools
+sentence-transformers
+faiss-cpu
+PyPDF2
+python-docx
+numpy
